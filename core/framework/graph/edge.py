@@ -35,6 +35,47 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_TOKENS = 8192
 
+# Key name patterns that must never be sent to external LLM prompts.
+# Matched case-insensitively against each memory key.
+SENSITIVE_KEY_PATTERNS = frozenset({
+    "key",
+    "token",
+    "secret",
+    "password",
+    "credential",
+    "auth",
+    "bearer",
+    "api_key",
+    "access_token",
+    "refresh_token",
+})
+
+
+def _sanitize_memory_for_prompt(
+    memory: dict[str, Any], max_keys: int = 5
+) -> dict[str, str]:
+    """Sanitize shared memory before injection into LLM routing prompts.
+
+    Redacts any key whose name contains a sensitive pattern (e.g.
+    'api_key', 'access_token', 'password') to prevent credential or
+    PII leakage to third-party LLM providers.
+
+    Args:
+        memory: The shared-memory dict.
+        max_keys: Maximum number of keys to include (for prompt size control).
+
+    Returns:
+        Sanitized dict safe for LLM prompt injection.
+    """
+    safe: dict[str, str] = {}
+    for k, v in list(memory.items())[:max_keys]:
+        k_lower = k.lower()
+        if any(pattern in k_lower for pattern in SENSITIVE_KEY_PATTERNS):
+            safe[k] = "[REDACTED]"
+        else:
+            safe[k] = str(v)[:100]
+    return safe
+
 
 class EdgeCondition(StrEnum):
     """When an edge should be traversed."""
@@ -235,7 +276,7 @@ Should we proceed to: {target_node_name or self.target}?
 Edge description: {self.description or "No description"}
 
 **Context from memory**:
-{json.dumps({k: str(v)[:100] for k, v in list(memory.items())[:5]}, indent=2)}
+{json.dumps(_sanitize_memory_for_prompt(memory), indent=2)}
 
 Evaluate whether proceeding to this next node is the right step toward achieving the goal.
 Consider:
