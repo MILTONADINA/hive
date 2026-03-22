@@ -244,8 +244,11 @@ def get_claude_code_token() -> str | None:
     # Token is expired or near expiry — attempt refresh
     refresh_token = oauth.get("refreshToken")
     if not refresh_token:
-        logger.warning("Claude Code token expired and no refresh token available")
-        return access_token  # Return expired token; it may still work briefly
+        logger.warning(
+            "Claude Code token expired and no refresh token available. "
+            "Run 'claude' to re-authenticate."
+        )
+        return None
 
     logger.info("Claude Code token expired or near expiry, refreshing...")
     token_data = _refresh_claude_code_token(refresh_token)
@@ -254,9 +257,10 @@ def get_claude_code_token() -> str | None:
         _save_refreshed_credentials(token_data)
         return token_data["access_token"]
 
-    # Refresh failed — return the existing token and warn
+    # Refresh failed — return None so callers see a clear auth failure
+    # instead of wasting retry budget on a token that is known to be expired.
     logger.warning("Claude Code token refresh failed. Run 'claude' to re-authenticate.")
-    return access_token
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -448,8 +452,10 @@ def get_codex_token() -> str | None:
     # Token is expired or near expiry — attempt refresh
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
-        logger.warning("Codex token expired and no refresh token available")
-        return access_token  # Return expired token; it may still work briefly
+        logger.warning(
+            "Codex token expired and no refresh token available. Run 'codex' to re-authenticate."
+        )
+        return None
 
     logger.info("Codex token expired or near expiry, refreshing...")
     token_data = _refresh_codex_token(refresh_token)
@@ -458,9 +464,10 @@ def get_codex_token() -> str | None:
         _save_refreshed_codex_credentials(auth_data, token_data)
         return token_data["access_token"]
 
-    # Refresh failed — return the existing token and warn
+    # Refresh failed — return None so callers see a clear auth failure
+    # instead of wasting retry budget on a token that is known to be expired.
     logger.warning("Codex token refresh failed. Run 'codex' to re-authenticate.")
-    return access_token
+    return None
 
 
 def _get_account_id_from_jwt(access_token: str) -> str | None:
